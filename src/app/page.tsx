@@ -54,7 +54,6 @@ export default function Home() {
       const result = await generateMathProblem(difficulty)
       const elapsed = Date.now() - startTime
       console.log(`Generated problem in ${elapsed}ms:`);
-      console.log(result);
       
       if (result.success && result.data) {
         setProblem(result.data)
