@@ -70,7 +70,7 @@ export async function generateMathProblem(difficulty: DifficultyLevel = 'medium'
             },
         });
 
-        let data = response?.text;
+        const data = response?.text;
         const cleanText = data?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const problemData = JSON.parse(cleanText || '{}');
 

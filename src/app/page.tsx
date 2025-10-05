@@ -6,7 +6,6 @@ import { generateMathProblem, checkAnswer, DifficultyLevel, MathProblem } from '
 import { getDifficultyColor, getDifficultyBadgeColor } from '@/lib/utils'
 import { ProblemHistory, TabHistory } from '@/components/TabHistory'
 import { ScoreStats, TabStats } from '@/components/TabStats'
-import saveToLocalStorage from '@/lib/savetoLocalStorage'
 
 
 export default function Home() {
@@ -163,7 +162,6 @@ export default function Home() {
     localStorage.removeItem(SCORES_KEY)
   }
 
-  saveToLocalStorage({ setHistory, setScores, history, scores, HISTORY_KEY, SCORES_KEY, STORAGE_EXPIRY })
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
