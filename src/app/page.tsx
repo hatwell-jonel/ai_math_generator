@@ -1,41 +1,111 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BookOpen, TrendingUp, Lightbulb, ListOrdered, History, Award } from 'lucide-react'
+import { BookOpen, TrendingUp, Lightbulb, ListOrdered, History } from 'lucide-react'
 import { generateMathProblem, checkAnswer, DifficultyLevel, MathProblem } from './actions/generateMathProblem'
 import { getDifficultyColor, getDifficultyBadgeColor } from '@/lib/utils'
 import { ProblemHistory, TabHistory } from '@/components/TabHistory'
 import { ScoreStats, TabStats } from '@/components/TabStats'
 
+const HISTORY_KEY = 'math_history'
+const SCORES_KEY = 'math_scores'
+const STORAGE_EXPIRY = 12 * 60 * 60 * 1000 // 12 hours
+
+const initialScores: ScoreStats = {
+  total: 0,
+  correct: 0,
+  byDifficulty: {
+    easy: { total: 0, correct: 0 },
+    medium: { total: 0, correct: 0 },
+    hard: { total: 0, correct: 0 }
+  }
+}
 
 export default function Home() {
+  // Problem state
   const [problem, setProblem] = useState<MathProblem | null>(null)
-  const [userAnswer, setUserAnswer] = useState('')
-  const [feedback, setFeedback] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium')
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  
+  // Answer state
+  const [userAnswer, setUserAnswer] = useState('')
+  const [lastSubmittedAnswer, setLastSubmittedAnswer] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState('')
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  
+  // UI state
+  const [isLoading, setIsLoading] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const [showSteps, setShowSteps] = useState(false)
   const [activeTab, setActiveTab] = useState<'solve' | 'history' | 'stats'>('solve')
-  const [lastSubmittedAnswer, setLastSubmittedAnswer] = useState<string | null>(null)
   
+  // Data state
   const [history, setHistory] = useState<ProblemHistory[]>([])
-  const [scores, setScores] = useState<ScoreStats>({
-    total: 0,
-    correct: 0,
-    byDifficulty: {
-      easy: { total: 0, correct: 0 },
-      medium: { total: 0, correct: 0 },
-      hard: { total: 0, correct: 0 }
-    }
-  })
+  const [scores, setScores] = useState<ScoreStats>(initialScores)
 
-  // Load history and scores from localStorage on mount, and save on updates
-  const HISTORY_KEY = 'math_history'
-  const SCORES_KEY = 'math_scores'
-  const STORAGE_EXPIRY = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const loadStoredData = () => {
+      try {
+        const now = Date.now()
+        
+        const storedHistory = localStorage.getItem(HISTORY_KEY)
+        if (storedHistory) {
+          const parsed = JSON.parse(storedHistory)
+          if (parsed.timestamp && now - parsed.timestamp < STORAGE_EXPIRY && Array.isArray(parsed.data)) {
+            setHistory(parsed.data.map((item: any) => ({
+              ...item,
+              timestamp: new Date(item.timestamp)
+            })))
+          } else {
+            localStorage.removeItem(HISTORY_KEY)
+          }
+        }
+
+        const storedScores = localStorage.getItem(SCORES_KEY)
+        if (storedScores) {
+          const parsed = JSON.parse(storedScores)
+          if (parsed.timestamp && now - parsed.timestamp < STORAGE_EXPIRY && parsed.data) {
+            setScores(parsed.data)
+          } else {
+            localStorage.removeItem(SCORES_KEY)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading from localStorage:', error)
+      }
+    }
+
+    loadStoredData()
+  }, [])
+
+  // Auto-save history
+  useEffect(() => {
+    if (history.length > 0) {
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify({
+          data: history,
+          timestamp: Date.now()
+        }))
+      } catch (error) {
+        console.error('Error saving history:', error)
+      }
+    }
+  }, [history])
+
+  // Auto-save scores
+  useEffect(() => {
+    if (scores.total > 0) {
+      try {
+        localStorage.setItem(SCORES_KEY, JSON.stringify({
+          data: scores,
+          timestamp: Date.now()
+        }))
+      } catch (error) {
+        console.error('Error saving scores:', error)
+      }
+    }
+  }, [scores])
   
   const generateProblemHandler = async () => {
     setIsLoading(true)
@@ -46,26 +116,19 @@ export default function Home() {
     setShowHint(false)
     setShowSteps(false)
     setLastSubmittedAnswer(null)
-    setProblem(null) // Clear previous problem
+    setProblem(null)
 
     const startTime = Date.now()
 
     try {
       const result = await generateMathProblem(difficulty)
       const elapsed = Date.now() - startTime
-      console.log(`Generated problem in ${elapsed}ms:`);
+      console.log(`Generated problem in ${elapsed}ms`)
       
       if (result.success && result.data) {
         setProblem(result.data)
-        
-        if (result.sessionId) {
-          setSessionId(result.sessionId)
-        }
-        
-        if (result.warning) {
-          console.warn(result.warning)
-        }
-
+        if (result.sessionId) setSessionId(result.sessionId)
+        if (result.warning) console.warn(result.warning)
       } else {
         setFeedback('Failed to generate problem. Please try again.')
       }
@@ -80,9 +143,14 @@ export default function Home() {
   const submitAnswer = async () => {
     if (!problem) return
     
-    // Prevent duplicate submissions
     if (userAnswer === lastSubmittedAnswer) {
       setFeedback('You have already submitted this answer. Please try a different answer or generate a new problem.')
+      return
+    }
+    
+    const numericAnswer = parseFloat(userAnswer)
+    if (isNaN(numericAnswer)) {
+      setFeedback('Please enter a valid number.')
       return
     }
     
@@ -90,27 +158,13 @@ export default function Home() {
     setFeedback('')
     
     try {
-      const numericAnswer = parseFloat(userAnswer)
-      
-      if (isNaN(numericAnswer)) {
-        setFeedback('Please enter a valid number.')
-        setIsLoading(false)
-        return
-      }
-      
-      const result = await checkAnswer(
-        numericAnswer,
-        problem.final_answer,
-        problem.problem_text,
-        sessionId
-      )
+      const result = await checkAnswer(numericAnswer, problem.final_answer, problem.problem_text, sessionId)
       
       if (result.success) {
         setIsCorrect(result.isCorrect)
         setFeedback(result.feedback || '')
-        setLastSubmittedAnswer(userAnswer) // Store the submitted answer
+        setLastSubmittedAnswer(userAnswer)
 
-        // Update history
         const historyEntry: ProblemHistory = {
           id: Date.now().toString(),
           problem: problem.problem_text,
@@ -122,7 +176,6 @@ export default function Home() {
         }
         setHistory(prev => [historyEntry, ...prev])
 
-        // Update scores
         setScores(prev => ({
           total: prev.total + 1,
           correct: prev.correct + (result.isCorrect ? 1 : 0),
@@ -134,7 +187,6 @@ export default function Home() {
             }
           }
         }))
-
       } else {
         setFeedback('Failed to check answer. Please try again.')
       }
@@ -148,19 +200,16 @@ export default function Home() {
 
   const clearHistory = () => {
     setHistory([])
-    setScores({
-      total: 0,
-      correct: 0,
-      byDifficulty: {
-        easy: { total: 0, correct: 0 },
-        medium: { total: 0, correct: 0 },
-        hard: { total: 0, correct: 0 }
-      }
-    })
+    setScores(initialScores)
     localStorage.removeItem(HISTORY_KEY)
     localStorage.removeItem(SCORES_KEY)
   }
 
+  const resetAnswer = () => {
+    setUserAnswer('')
+    setFeedback('')
+    setIsCorrect(null)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -169,13 +218,12 @@ export default function Home() {
           Math Problem Generator
         </h1>
 
+        {/* Tab Navigation */}
         <div className="flex gap-2 mb-6 bg-white rounded-lg shadow-lg p-2">
           <button
             onClick={() => setActiveTab('solve')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-              activeTab === 'solve'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-700 hover:bg-gray-100'
+              activeTab === 'solve' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <BookOpen size={20} />
@@ -184,9 +232,7 @@ export default function Home() {
           <button
             onClick={() => setActiveTab('history')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-              activeTab === 'history'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-700 hover:bg-gray-100'
+              activeTab === 'history' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <History size={20} />
@@ -195,9 +241,7 @@ export default function Home() {
           <button
             onClick={() => setActiveTab('stats')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-              activeTab === 'stats'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-700 hover:bg-gray-100'
+              activeTab === 'stats' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <TrendingUp size={20} />
@@ -205,8 +249,10 @@ export default function Home() {
           </button>
         </div>
 
+        {/* Solve Tab */}
         {activeTab === 'solve' && (
           <>
+            {/* Difficulty Selection */}
             <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
               <h2 className="text-lg font-semibold text-gray-700 mb-4">Select Difficulty:</h2>
               <div className="grid grid-cols-3 gap-3 mb-4">
@@ -229,12 +275,13 @@ export default function Home() {
               <button
                 onClick={generateProblemHandler}
                 disabled={isLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition duration-200 ease-in-out transform disabled:transform-none"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition duration-200"
               >
                 {isLoading ? 'Generating...' : `Generate ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Problem`}
               </button>
             </div>
 
+            {/* Problem Display */}
             {problem && (
               <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
                 <div className="flex items-center justify-between mb-4">
@@ -247,6 +294,7 @@ export default function Home() {
                   {problem.problem_text}
                 </p>
 
+                {/* Hint and Steps Buttons */}
                 <div className="flex gap-3 mb-6">
                   {problem.hint && (
                     <button
@@ -268,16 +316,18 @@ export default function Home() {
                   )}
                 </div>
 
+                {/* Hint Display */}
                 {showHint && problem.hint && (
                   <div className="mb-6 p-4 bg-purple-50 border-l-4 border-purple-400 rounded">
-                    <p className="text-purple-900 font-medium">💡 Hint:</p>
+                    <p className="text-purple-900 font-medium">Hint:</p>
                     <p className="text-purple-800">{problem.hint}</p>
                   </div>
                 )}
 
+                {/* Steps Display */}
                 {showSteps && problem.steps && problem.steps.length > 0 && (
                   <div className="mb-6 p-4 bg-indigo-50 border-l-4 border-indigo-400 rounded">
-                    <p className="text-indigo-900 font-medium mb-2">📝 Step-by-Step Solution:</p>
+                    <p className="text-indigo-900 font-medium mb-2">Step-by-Step Solution:</p>
                     <ol className="list-decimal list-inside space-y-2">
                       {problem.steps.map((step, index) => (
                         <li key={index} className="text-indigo-800">{step}</li>
@@ -286,6 +336,7 @@ export default function Home() {
                   </div>
                 )}
                 
+                {/* Answer Input */}
                 <div className="space-y-4">
                   <div>
                     <label htmlFor="answer" className="block text-sm font-medium text-gray-700 mb-2">
@@ -297,9 +348,9 @@ export default function Home() {
                       step="any"
                       value={userAnswer}
                       onChange={(e) => setUserAnswer(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && userAnswer && !isLoading && submitAnswer()}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                       placeholder="Enter your answer"
-                      required
                       disabled={isLoading}
                     />
                   </div>
@@ -307,7 +358,7 @@ export default function Home() {
                   <button
                     onClick={submitAnswer}
                     disabled={!userAnswer || isLoading}
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition duration-200 ease-in-out transform hover:scale-105 disabled:transform-none"
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition duration-200 transform disabled:transform-none"
                   >
                     {isLoading ? 'Checking...' : 'Submit Answer'}
                   </button>
@@ -315,28 +366,29 @@ export default function Home() {
               </div>
             )}
 
+            {/* Loading State */}
             {isLoading && !problem && (
               <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 text-lg">Generating your math problem...</p>
-                    <p className="text-gray-500 text-sm mt-2">This may take a few seconds</p>
                   </div>
                 </div>
               </div>
             )}
 
+            {/* Feedback Display */}
             {feedback && (
               <div className={`rounded-lg shadow-lg p-6 ${isCorrect ? 'bg-green-50 border-2 border-green-200' : 'bg-yellow-50 border-2 border-yellow-200'}`}>
                 <h2 className="text-xl font-semibold mb-4 text-gray-700">
-                  {isCorrect ? '✅ Correct!' : '❌ Not quite right'}
+                  {isCorrect ? 'Correct!' : 'Not quite right'}
                 </h2>
                 <p className="text-gray-800 leading-relaxed">{feedback}</p>
                 
                 {!isCorrect && (
                   <button
-                    onClick={() => setUserAnswer('')}
+                    onClick={resetAnswer}
                     className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
                   >
                     Try Again
@@ -346,6 +398,8 @@ export default function Home() {
             )}
           </>
         )}
+        
+        {/* History Tab */}
         {activeTab === 'history' && (
           <>
             <TabHistory history={history} />
@@ -359,7 +413,9 @@ export default function Home() {
             )}
           </>
         )}
-        {activeTab === 'stats' && (<TabStats scores={scores} />)}
+        
+        {/* Stats Tab */}
+        {activeTab === 'stats' && <TabStats scores={scores} />}
       </main>
     </div>
   )
