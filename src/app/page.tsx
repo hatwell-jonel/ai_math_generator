@@ -53,7 +53,7 @@ export default function Home() {
         if (storedHistory) {
           const parsed = JSON.parse(storedHistory)
           if (parsed.timestamp && now - parsed.timestamp < STORAGE_EXPIRY && Array.isArray(parsed.data)) {
-            setHistory(parsed.data.map((item: any) => ({
+            setHistory(parsed.data.map((item: ProblemHistory) => ({
               ...item,
               timestamp: new Date(item.timestamp)
             })))
