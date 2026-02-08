@@ -75,34 +75,34 @@ export async function generateMathProblem(difficulty: DifficultyLevel = 'medium'
         const problemData = JSON.parse(cleanText || '{}');
 
         // Save the problem to the database
-        const { data: savedProblem, error: dbError } = await supabase
-            .from('math_problem_sessions')
-            .insert({
-                problem_text: problemData.problem_text,
-                correct_answer: problemData.final_answer,
-                difficulty_level: difficulty,
-                hint: problemData.hint || null,
-                solution_steps: problemData.steps || null
-            })
-            .select()
-            .single();
+        // const { data: savedProblem, error: dbError } = await supabase
+        //     .from('math_problem_sessions')
+        //     .insert({
+        //         problem_text: problemData.problem_text,
+        //         correct_answer: problemData.final_answer,
+        //         difficulty_level: difficulty,
+        //         hint: problemData.hint || null,
+        //         solution_steps: problemData.steps || null
+        //     })
+        //     .select()
+        //     .single();
 
-        if (dbError) {
-            console.error('Error saving to database:', dbError);
-            // Still return the problem even if DB save fails
-            return {
-                success: true,
-                data: problemData,
-                sessionId: null,
-                warning: 'Problem generated but not saved to database'
-            };
-        }
+        // if (dbError) {
+        //     console.error('Error saving to database:', dbError);
+        //     // Still return the problem even if DB save fails
+        //     return {
+        //         success: true,
+        //         data: problemData,
+        //         sessionId: null,
+        //         warning: 'Problem generated but not saved to database'
+        //     };
+        // }
 
         return {
             success: true,
             data: problemData,
             difficulty: difficulty,
-            sessionId: savedProblem.id,
+            // sessionId: savedProblem.id,
         };
     } catch (err) {
         console.error('Error generating math problem:', err);
@@ -129,7 +129,7 @@ function feedbackPrompt(problemText: string, correctAnswer: number, userAnswer: 
 }
 
 
-export async function checkAnswer(userAnswer: number, correctAnswer: number, problemText: string, sessionId: string | null) {
+export async function checkAnswer(userAnswer: number, correctAnswer: number, problemText: string, sessionId?: string | null) {
     try {
         // Check if answer is correct (with small tolerance for decimal answers)
         const isCorrect = Math.abs(userAnswer - correctAnswer) < 0.01;
@@ -158,21 +158,21 @@ export async function checkAnswer(userAnswer: number, correctAnswer: number, pro
             feedback = generatedFeedback || 'Good try! Check your calculations and try again.';
         }
 
-        if (sessionId) {
-            supabase
-                .from('math_problem_submissions')
-                .insert({
-                    session_id: sessionId,
-                    user_answer: userAnswer,
-                    is_correct: isCorrect,
-                    feedback_text: feedback
-                })
-                .then(({ error: dbError }) => {
-                    if (dbError) {
-                        console.error('Error saving submission:', dbError);
-                    }
-                });
-        }
+        // if (sessionId) {
+        //     supabase
+        //         .from('math_problem_submissions')
+        //         .insert({
+        //             session_id: sessionId,
+        //             user_answer: userAnswer,
+        //             is_correct: isCorrect,
+        //             feedback_text: feedback
+        //         })
+        //         .then(({ error: dbError }) => {
+        //             if (dbError) {
+        //                 console.error('Error saving submission:', dbError);
+        //             }
+        //         });
+        // }
 
         return {
             success: true,

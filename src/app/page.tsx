@@ -158,7 +158,7 @@ export default function Home() {
     setFeedback('')
     
     try {
-      const result = await checkAnswer(numericAnswer, problem.final_answer, problem.problem_text, sessionId)
+      const result = await checkAnswer(numericAnswer, problem.final_answer, problem.problem_text)
       
       if (result.success) {
         setIsCorrect(result.isCorrect)
