@@ -72,7 +72,7 @@ export async function generateMathProblem(difficulty: DifficultyLevel = 'medium'
 
         const data = response?.text;
         const cleanText = data?.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const problemData = JSON.parse(cleanText || '{}');
+        const problemData = JSON.parse(cleanText || '{}'); 
 
         // Save the problem to the database
         // const { data: savedProblem, error: dbError } = await supabase
